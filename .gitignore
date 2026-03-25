@@ -1,0 +1,7 @@
+node_modules/
+.env
+npm-debug.log*
+node_modules
+config/azure.env
+config/azure.secrets.env
+.env.e2e

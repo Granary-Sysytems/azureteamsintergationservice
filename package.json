@@ -1,0 +1,36 @@
+{
+  "name": "azureteamsintergationservice",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "node --test tests/unit/*.test.js tests/integration/*.test.js",
+    "test:e2e": "node --test tests/e2e/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Granary-Sysytems/azureteamsintergationservice.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Granary-Sysytems/azureteamsintergationservice/issues"
+  },
+  "homepage": "https://github.com/Granary-Sysytems/azureteamsintergationservice#readme",
+  "description": "MS Teams Bot to Azure Queue and 1C polling integration service",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.3.2",
+    "@azure/storage-queue": "^12.29.0",
+    "botbuilder": "^4.23.3",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
