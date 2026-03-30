@@ -45,3 +45,33 @@ test("allows request with valid bearer token", () => {
   assert.equal(called, true);
   assert.equal(res.statusCode, 200);
 });
+
+test("rejects when bearer token is invalid", () => {
+  const middleware = createBearerAuth("token-123");
+  const req = { headers: { authorization: "Bearer token-999" } };
+  const res = createMockRes();
+  let called = false;
+
+  middleware(req, res, () => {
+    called = true;
+  });
+
+  assert.equal(called, false);
+  assert.equal(res.statusCode, 401);
+  assert.deepEqual(res.payload, { error: "Unauthorized" });
+});
+
+test("rejects when auth scheme is not Bearer", () => {
+  const middleware = createBearerAuth("token-123");
+  const req = { headers: { authorization: "Basic token-123" } };
+  const res = createMockRes();
+  let called = false;
+
+  middleware(req, res, () => {
+    called = true;
+  });
+
+  assert.equal(called, false);
+  assert.equal(res.statusCode, 401);
+  assert.deepEqual(res.payload, { error: "Unauthorized" });
+});

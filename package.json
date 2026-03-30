@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@azure/data-tables": "^13.3.2",
+    "@azure/storage-blob": "^12.31.0",
     "@azure/storage-queue": "^12.29.0",
     "botbuilder": "^4.23.3",
     "dotenv": "^17.3.1",

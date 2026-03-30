@@ -1,7 +1,3 @@
-const dotenv = require("dotenv");
-
-dotenv.config();
-
 const requiredKeys = [
   "BOT_APP_ID",
   "BOT_APP_PASSWORD",
@@ -25,6 +21,7 @@ function readConfig(env = process.env) {
     port,
     botAppId: env.BOT_APP_ID,
     botAppPassword: env.BOT_APP_PASSWORD,
+    botAppTenantId: env.BOT_APP_TENANT_ID || env.TENANT_ID || null,
     storageConnectionString: env.AZURE_STORAGE_CONNECTION_STRING,
     queueName: env.AZURE_QUEUE_NAME || "teams-updates",
     tableName: env.AZURE_TABLE_NAME || "ConversationReferences",

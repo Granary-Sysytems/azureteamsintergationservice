@@ -1,24 +1,20 @@
-const { QueueServiceClient } = require("@azure/storage-queue");
-const { TableClient } = require("@azure/data-tables");
 const { getConfig } = require("./config/env");
 const { createQueueService } = require("./services/queueService");
 const { createConversationStore } = require("./services/conversationStore");
 const { createAdapter, createBot } = require("./bot/bot");
 const { createSendService } = require("./services/sendService");
+const { createAzureClients } = require("./infrastructure/azureClients");
 
 function createAppContext() {
   const config = getConfig();
 
-  const queueServiceClient = QueueServiceClient.fromConnectionString(
-    config.storageConnectionString,
-  );
-  const queueClient = queueServiceClient.getQueueClient(config.queueName);
-  const queueService = createQueueService(queueClient);
+  const { queueClient, tableClient, fileAttachmentService } = createAzureClients({
+    storageConnectionString: config.storageConnectionString,
+    queueName: config.queueName,
+    tableName: config.tableName,
+  });
 
-  const tableClient = TableClient.fromConnectionString(
-    config.storageConnectionString,
-    config.tableName,
-  );
+  const queueService = createQueueService(queueClient);
   const conversationStore = createConversationStore(tableClient, {
     defaultTarget: config.defaultTarget,
   });
@@ -26,6 +22,7 @@ function createAppContext() {
   const adapter = createAdapter({
     botAppId: config.botAppId,
     botAppPassword: config.botAppPassword,
+    botAppTenantId: config.botAppTenantId,
   });
 
   const bot = createBot({
@@ -38,6 +35,7 @@ function createAppContext() {
     getReferenceByConversationId: conversationStore.getReferenceByConversationId,
     getReferenceByTarget: conversationStore.getReferenceByTarget,
     defaultTarget: config.defaultTarget,
+    uploadTextFile: fileAttachmentService.uploadTextFile,
   });
 
   return {

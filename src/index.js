@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const { bootstrap } = require("./server");
 const { createAppContext } = require("./appContext");
 

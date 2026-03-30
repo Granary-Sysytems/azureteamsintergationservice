@@ -1,61 +1,27 @@
-const { MessageFactory } = require("botbuilder");
-
-class SendError extends Error {
-  constructor(message, statusCode) {
-    super(message);
-    this.name = "SendError";
-    this.statusCode = statusCode;
-  }
-}
-
-function buildOutgoingActivity({ text, adaptiveCard }) {
-  if (!text && !adaptiveCard) {
-    throw new SendError("Request must include `text` or `adaptiveCard`.", 400);
-  }
-
-  if (adaptiveCard) {
-    const attachment = {
-      contentType: "application/vnd.microsoft.card.adaptive",
-      content: adaptiveCard,
-    };
-    return MessageFactory.attachment(attachment, text || undefined);
-  }
-
-  return MessageFactory.text(text);
-}
+const { SendError } = require("./send/errors");
+const { buildOutgoingActivity } = require("./send/buildOutgoingActivity");
+const { resolveReference } = require("./send/resolveReference");
 
 function createSendService({
   adapter,
   getReferenceByConversationId,
   getReferenceByTarget,
   defaultTarget = "default",
+  uploadTextFile,
 }) {
   if (!adapter) {
     throw new Error("adapter is required");
   }
 
-  async function resolveReference({ conversationId, target }) {
-    if (conversationId) {
-      const byConversationId =
-        await getReferenceByConversationId(conversationId);
-      if (!byConversationId) {
-        throw new SendError("Conversation reference was not found.", 404);
-      }
-      return byConversationId;
-    }
-
-    const resolvedTarget = target || defaultTarget;
-    const byTarget = await getReferenceByTarget(resolvedTarget);
-    if (!byTarget) {
-      throw new SendError("Target reference was not found.", 404);
-    }
-
-    return byTarget;
-  }
-
   async function proactiveSend(payload) {
-    const reference = await resolveReference(payload);
-    const outgoingActivity = buildOutgoingActivity(payload);
+    const reference = await resolveReference(payload, {
+      getReferenceByConversationId,
+      getReferenceByTarget,
+      defaultTarget,
+    });
+    const outgoingActivity = await buildOutgoingActivity(payload, {
+      uploadTextFile,
+    });
     let response;
 
     try {
