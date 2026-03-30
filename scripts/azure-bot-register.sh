@@ -8,7 +8,6 @@ set -a
 [ -f "$ROOT_DIR/config/azure.env" ] && source "$ROOT_DIR/config/azure.env"
 [ -f "$ROOT_DIR/config/azure.secrets.env" ] && source "$ROOT_DIR/config/azure.secrets.env"
 set +a
-
 if ! command -v az >/dev/null 2>&1; then
   echo "Azure CLI is not installed. Install it first: brew install azure-cli"
   exit 1

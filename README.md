@@ -223,7 +223,7 @@ Or create/register bot via script:
 
 ## E2E Tests (Ihor)
 
-Tests are configured for `ihor.neshyk@granary.systems` by default.
+Tests are configured for `ihor.neshyk@ukroliya.com` by default.
 
 ```bash
 cp .env.e2e.example .env.e2e

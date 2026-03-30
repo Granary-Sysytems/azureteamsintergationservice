@@ -6,7 +6,7 @@ dotenv.config({ path: ".env.e2e" });
 
 const baseUrl = process.env.SERVICE_BASE_URL;
 const bearerToken = process.env.API_BEARER_TOKEN;
-const targetEmail = process.env.TARGET_EMAIL || "ihor.neshyk@granary.systems";
+const targetEmail = process.env.TARGET_EMAIL || "ihor.neshyk@ukroliya.com";
 const runReceiveTest = process.env.RUN_RECEIVE_TEST === "1";
 const receivePollAttempts = Number.parseInt(
   process.env.RECEIVE_POLL_ATTEMPTS || "20",
@@ -67,13 +67,49 @@ async function callJson(path, method, body) {
   return { response, responseJson };
 }
 
-test("send text message to target user", async () => {
+test("send adaptive card with buttons to target user", async () => {
   assert.ok(baseUrl, "SERVICE_BASE_URL is required in .env.e2e");
   assert.ok(bearerToken, "API_BEARER_TOKEN is required in .env.e2e");
 
   const payload = {
     target: targetEmail,
-    text: `E2E ping for ${targetEmail} at ${new Date().toISOString()}`,
+    text: `E2E card ping for ${targetEmail} at ${new Date().toISOString()}`,
+    adaptiveCard: {
+      $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+      type: "AdaptiveCard",
+      version: "1.5",
+      body: [
+        {
+          type: "TextBlock",
+          weight: "Bolder",
+          size: "Medium",
+          text: "BAF request test",
+        },
+        {
+          type: "TextBlock",
+          wrap: true,
+          text: `Test for ${targetEmail}`,
+        },
+      ],
+      actions: [
+        {
+          type: "Action.Submit",
+          title: "Approve",
+          data: {
+            action: "approve",
+            requestId: `REQ-${Date.now()}`,
+          },
+        },
+        {
+          type: "Action.Submit",
+          title: "Reject",
+          data: {
+            action: "reject",
+            requestId: `REQ-${Date.now()}`,
+          },
+        },
+      ],
+    },
   };
 
   const { response, responseJson } = await callJson("/send", "POST", payload);
