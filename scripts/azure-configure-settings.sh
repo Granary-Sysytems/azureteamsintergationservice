@@ -44,7 +44,6 @@ az webapp config appsettings set \
     AZURE_STORAGE_CONNECTION_STRING="$AZURE_STORAGE_CONNECTION_STRING" \
     AZURE_QUEUE_NAME="teams-updates" \
     AZURE_TABLE_NAME="ConversationReferences" \
-    API_BEARER_TOKEN="$API_BEARER_TOKEN" \
-    DEFAULT_TARGET="default"
+    API_BEARER_TOKEN="$API_BEARER_TOKEN"
 
 echo "Web app settings configured."

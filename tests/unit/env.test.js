@@ -25,6 +25,13 @@ test("readConfig validates port", () => {
   );
 });
 
+test("readConfig validates bind token ttl days", () => {
+  assert.throws(
+    () => readConfig({ ...baseEnv(), BIND_TOKEN_TTL_DAYS: "0" }),
+    /BIND_TOKEN_TTL_DAYS must be a positive integer/,
+  );
+});
+
 test("readConfig applies defaults and optional tenant fallback", () => {
   const config = readConfig({
     ...baseEnv(),
@@ -35,5 +42,5 @@ test("readConfig applies defaults and optional tenant fallback", () => {
   assert.equal(config.botAppTenantId, "tenant-a");
   assert.equal(config.queueName, "teams-updates");
   assert.equal(config.tableName, "ConversationReferences");
-  assert.equal(config.defaultTarget, "default");
+  assert.equal(config.bindTokenTtlMs, 365 * 24 * 60 * 60 * 1000);
 });

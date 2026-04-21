@@ -14,7 +14,7 @@ test("buildOutgoingActivity validates payload", async () => {
 });
 
 test("buildOutgoingActivity builds adaptive card and file attachment", async () => {
-  const activity = await buildOutgoingActivity(
+  const result = await buildOutgoingActivity(
     {
       text: "Report attached",
       adaptiveCard: {
@@ -36,17 +36,118 @@ test("buildOutgoingActivity builds adaptive card and file attachment", async () 
     },
   );
 
-  assert.equal(activity.type, "message");
-  assert.match(activity.text, /Report attached/);
-  assert.match(activity.text, /\[sample-report\.txt\]\(https:\/\/files\.example\//);
-  assert.equal(activity.attachments.length, 1);
+  assert.equal(result.activity.type, "message");
+  assert.match(result.activity.text, /Report attached/);
+  assert.match(result.activity.text, /\[sample-report\.txt\]\(https:\/\/files\.example\//);
+  assert.equal(result.activity.attachments.length, 1);
   assert.equal(
-    activity.attachments[0].contentType,
+    result.activity.attachments[0].contentType,
     "application/vnd.microsoft.card.adaptive",
+  );
+  assert.equal(result.uploadedFiles.length, 1);
+});
+
+test("buildOutgoingActivity enriches adaptive card submit actions with snapshot", async () => {
+  const result = await buildOutgoingActivity({
+    adaptiveCard: {
+      $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+      type: "AdaptiveCard",
+      version: "1.5",
+      body: [{ type: "TextBlock", text: "Original content" }],
+      actions: [
+        {
+          type: "Action.Submit",
+          title: "Approve",
+          data: { action: "approve", requestId: "REQ-100" },
+        },
+      ],
+    },
+  });
+
+  const submitData = result.activity.attachments[0].content.actions[0].data;
+  assert.equal(submitData.action, "approve");
+  assert.equal(submitData.__actionTitle, "Approve");
+  assert.ok(submitData.__originalCard);
+  assert.equal(submitData.__originalCard.body[0].text, "Original content");
+  assert.equal(submitData.__originalCard.actions, undefined);
+});
+
+test("buildOutgoingActivity enriches reject action with default required fields", async () => {
+  const result = await buildOutgoingActivity({
+    adaptiveCard: {
+      $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+      type: "AdaptiveCard",
+      version: "1.5",
+      body: [
+        { type: "Input.Text", id: "comment", label: "Коментар" },
+        { type: "Input.Number", id: "amount", label: "Сума" },
+      ],
+      actions: [
+        {
+          type: "Action.Submit",
+          title: "Відхилити",
+          data: {
+            action: "reject_or_request_clarification",
+            requestId: "REQ-200",
+          },
+        },
+      ],
+    },
+  });
+
+  const submitData = result.activity.attachments[0].content.actions[0].data;
+  assert.deepEqual(submitData.__requiredFields, ["comment", "amount"]);
+  assert.deepEqual(submitData.__numericFields, ["amount"]);
+  assert.equal(submitData.__amountRule, "positive");
+});
+
+test("buildOutgoingActivity uploads base64 file and appends attachment link", async () => {
+  const payload = {
+    text: "Please review the file",
+    base64File: {
+      fileName: "invoice.pdf",
+      contentType: "application/pdf",
+      base64Body: Buffer.from("binary-pdf-content").toString("base64"),
+    },
+  };
+
+  const result = await buildOutgoingActivity(payload, {
+    uploadBinaryFile: async ({ fileName, contentType }) => ({
+      fileName,
+      contentType,
+      downloadUrl: "https://files.example/invoice.pdf?sig=1",
+    }),
+  });
+
+  assert.equal(result.activity.type, "message");
+  assert.match(result.activity.text, /Please review the file/);
+  assert.match(
+    result.activity.text,
+    /\[invoice\.pdf\]\(https:\/\/files\.example\/invoice\.pdf\?sig=1\)/,
+  );
+  assert.deepEqual(result.uploadedFiles, [
+    {
+      fileName: "invoice.pdf",
+      contentType: "application/pdf",
+      downloadUrl: "https://files.example/invoice.pdf?sig=1",
+    },
+  ]);
+});
+
+test("buildOutgoingActivity validates base64 file payload fields", async () => {
+  await assert.rejects(
+    () =>
+      buildOutgoingActivity({
+        base64File: {
+          contentType: "application/pdf",
+          base64Body: "dGVzdA==",
+        },
+      }),
+    (error) => error instanceof SendError && error.statusCode === 400,
   );
 });
 
-test("proactiveSend resolves default target and sends message", async () => {
+test("proactiveSend resolves explicit target and sends message", async () => {
   let sentActivity = null;
   const adapter = {
     continueConversation: async (_reference, callback) => {
@@ -67,14 +168,14 @@ test("proactiveSend resolves default target and sends message", async () => {
       serviceUrl: "https://smba.trafficmanager.net/emea/",
       bot: { id: "bot-id" },
     }),
-    defaultTarget: "default",
   });
 
-  const result = await sendService.proactiveSend({ text: "hello" });
+  const result = await sendService.proactiveSend({ target: "user-a", text: "hello" });
 
   assert.equal(result.status, "sent");
-  assert.equal(result.conversationId, "conversation-for-default");
+  assert.equal(result.conversationId, "conversation-for-user-a");
   assert.ok(sentActivity);
+  assert.deepEqual(result.uploadedFiles, []);
 });
 
 test("proactiveSend resolves by conversation id when provided", async () => {
@@ -113,12 +214,27 @@ test("proactiveSend returns 404 when target reference is missing", async () => {
     adapter: { continueConversation: async () => {} },
     getReferenceByConversationId: async () => null,
     getReferenceByTarget: async () => null,
-    defaultTarget: "default",
+  });
+
+  await assert.rejects(
+    () => sendService.proactiveSend({ target: "user-missing", text: "hello" }),
+    (error) => error instanceof SendError && error.statusCode === 404,
+  );
+});
+
+test("proactiveSend returns 400 when neither conversationId nor target provided", async () => {
+  const sendService = createSendService({
+    adapter: { continueConversation: async () => {} },
+    getReferenceByConversationId: async () => null,
+    getReferenceByTarget: async () => null,
   });
 
   await assert.rejects(
     () => sendService.proactiveSend({ text: "hello" }),
-    (error) => error instanceof SendError && error.statusCode === 404,
+    (error) =>
+      error instanceof SendError &&
+      error.statusCode === 400 &&
+      error.message.includes("conversationId"),
   );
 });
 
@@ -142,7 +258,7 @@ test("proactiveSend maps auth errors to 502", async () => {
   });
 
   await assert.rejects(
-    () => sendService.proactiveSend({ text: "hello" }),
+    () => sendService.proactiveSend({ target: "user-a", text: "hello" }),
     (error) =>
       error instanceof SendError &&
       error.statusCode === 502 &&
@@ -168,10 +284,11 @@ test("proactiveSend maps non-auth send errors to 409", async () => {
   });
 
   await assert.rejects(
-    () => sendService.proactiveSend({ text: "hello" }),
+    () => sendService.proactiveSend({ target: "user-a", text: "hello" }),
     (error) =>
       error instanceof SendError &&
       error.statusCode === 409 &&
       error.message.includes("Conversation is not valid for proactive send"),
   );
 });
+

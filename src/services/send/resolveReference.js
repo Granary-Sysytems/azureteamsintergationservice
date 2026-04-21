@@ -2,11 +2,7 @@ const { SendError } = require("./errors");
 
 async function resolveReference(
   { conversationId, target },
-  {
-    getReferenceByConversationId,
-    getReferenceByTarget,
-    defaultTarget = "default",
-  },
+  { getReferenceByConversationId, getReferenceByTarget },
 ) {
   if (conversationId) {
     const byConversationId = await getReferenceByConversationId(conversationId);
@@ -16,8 +12,11 @@ async function resolveReference(
     return byConversationId;
   }
 
-  const resolvedTarget = target || defaultTarget;
-  const byTarget = await getReferenceByTarget(resolvedTarget);
+  if (!target) {
+    throw new SendError("Either `conversationId` or `target` is required.", 400);
+  }
+
+  const byTarget = await getReferenceByTarget(target);
   if (!byTarget) {
     throw new SendError("Target reference was not found.", 404);
   }

@@ -3,7 +3,15 @@ const { createBearerAuth } = require("./middleware/auth");
 const { createMessagesRouter } = require("./routes/messages");
 const { createIntegrationRouter } = require("./routes/integration");
 
-function createApp({ adapter, bot, queueService, sendService, bearerToken }) {
+function createApp({
+  adapter,
+  bot,
+  queueService,
+  sendService,
+  conversationStore,
+  bindService,
+  bearerToken,
+}) {
   const app = express();
 
   app.use(express.json({ limit: "512kb" }));
@@ -16,7 +24,12 @@ function createApp({ adapter, bot, queueService, sendService, bearerToken }) {
   app.use(
     "/",
     createBearerAuth(bearerToken),
-    createIntegrationRouter({ queueService, sendService }),
+    createIntegrationRouter({
+      queueService,
+      sendService,
+      conversationStore,
+      bindService,
+    }),
   );
 
   app.use((error, _req, res, _next) => {
@@ -36,6 +49,8 @@ async function bootstrap(deps) {
     bot: deps.bot,
     queueService: deps.queueService,
     sendService: deps.sendService,
+    conversationStore: deps.conversationStore,
+    bindService: deps.bindService,
     bearerToken: deps.config.apiBearerToken,
   });
 

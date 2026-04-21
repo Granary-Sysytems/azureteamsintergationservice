@@ -1,0 +1,44 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.1",
+  "id": "cdc894ed-aa34-47ab-9dd2-f86b48e7418f",
+  "packageName": "com.ukroliya.teamsbot.org",
+  "developer": {
+    "name": "Granary Systems",
+    "websiteUrl": "https://granary.systems",
+    "privacyUrl": "https://app-teams-bot.azurewebsites.net/privacy",
+    "termsOfUseUrl": "https://app-teams-bot.azurewebsites.net/terms"
+  },
+  "name": {
+    "short": "ukroliya-teams-bot",
+    "full": "Ukroliya Teams Integration Bot"
+  },
+  "description": {
+    "short": "Bot for Teams integration with BAF by Granary Systems.",
+    "full": "Bot for Teams integration with BAF, including proactive send and polling-based inbound processing. Developed by Granary Systems (https://granary.systems)."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#6264A7",
+  "bots": [
+    {
+      "botId": "d4686449-be3c-46b1-95c0-adf14f74c6ee",
+      "scopes": [
+        "personal"
+      ],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": [
+    "app-teams-bot.azurewebsites.net",
+    "token.botframework.com"
+  ]
+}

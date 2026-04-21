@@ -6,8 +6,8 @@ function createSendService({
   adapter,
   getReferenceByConversationId,
   getReferenceByTarget,
-  defaultTarget = "default",
   uploadTextFile,
+  uploadBinaryFile,
 }) {
   if (!adapter) {
     throw new Error("adapter is required");
@@ -17,10 +17,10 @@ function createSendService({
     const reference = await resolveReference(payload, {
       getReferenceByConversationId,
       getReferenceByTarget,
-      defaultTarget,
     });
-    const outgoingActivity = await buildOutgoingActivity(payload, {
+    const { activity: outgoingActivity, uploadedFiles } = await buildOutgoingActivity(payload, {
       uploadTextFile,
+      uploadBinaryFile,
     });
     let response;
 
@@ -44,6 +44,7 @@ function createSendService({
       status: "sent",
       conversationId: reference.conversation?.id || payload.conversationId,
       activityId: response?.id || null,
+      uploadedFiles,
     };
   }
 

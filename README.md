@@ -44,7 +44,7 @@ See `.env.example`:
 - `AZURE_QUEUE_NAME`
 - `AZURE_TABLE_NAME`
 - `API_BEARER_TOKEN`
-- `DEFAULT_TARGET`
+- `BIND_TOKEN_TTL_DAYS` (default `365`)
 
 ## API for 1C
 
@@ -95,6 +95,8 @@ curl -X POST "http://localhost:3978/ack" \
 
 ### POST /send
 
+Request must include either `conversationId` or `target`.
+
 Send by `conversationId`:
 
 ```bash
@@ -114,7 +116,7 @@ curl -X POST "http://localhost:3978/send" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "target":"default",
+    "target":"user-ihor",
     "adaptiveCard":{
       "$schema":"http://adaptivecards.io/schemas/adaptive-card.json",
       "type":"AdaptiveCard",
@@ -123,6 +125,111 @@ curl -X POST "http://localhost:3978/send" \
     }
   }'
 ```
+
+Inline inputs for rejection (comment + amount):
+
+```bash
+curl -X POST "http://localhost:3978/send" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target":"user-ihor",
+    "adaptiveCard":{
+      "$schema":"http://adaptivecards.io/schemas/adaptive-card.json",
+      "type":"AdaptiveCard",
+      "version":"1.5",
+      "body":[
+        {"type":"TextBlock","weight":"Bolder","text":"Погодити заявку"},
+        {"type":"Input.Text","id":"comment","label":"Коментар (для відхилення)","isMultiline":true},
+        {"type":"Input.Number","id":"amount","label":"Сума (для відхилення)"}
+      ],
+      "actions":[
+        {
+          "type":"Action.Submit",
+          "title":"Погодити заявку",
+          "data":{"action":"approve_request","requestId":"REQ-300"}
+        },
+        {
+          "type":"Action.Submit",
+          "title":"Відхилити заявку або відправити на уточнення",
+          "data":{
+            "action":"reject_or_request_clarification",
+            "requestId":"REQ-300",
+            "requiredFields":["comment","amount"]
+          }
+        }
+      ]
+    }
+  }'
+```
+
+Send binary file from base64 (service uploads to Blob and sends link):
+
+```bash
+curl -X POST "http://localhost:3978/send" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversationId":"19:xxxx@thread.v2",
+    "text":"Документ готовий",
+    "base64File":{
+      "fileName":"contract.docx",
+      "contentType":"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "base64Body":"UEsDBBQABgAIAAAAIQC..."
+    }
+  }'
+```
+
+Response includes uploaded links:
+
+```json
+{
+  "status": "sent",
+  "conversationId": "19:xxxx@thread.v2",
+  "activityId": "1712345678901",
+  "uploadedFiles": [
+    {
+      "fileName": "contract.docx",
+      "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "downloadUrl": "https://<storage>.blob.core.windows.net/teams-attachments/...?...SAS..."
+    }
+  ]
+}
+```
+
+### Onboarding new user by email (1C UI flow)
+
+Use this flow when 1C knows only user email and does not yet have `conversationId`.
+
+1) Start link process:
+
+```bash
+curl -X POST "http://localhost:3978/link/start" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email":"ihor.neshyk@ukroliya.com"
+  }'
+```
+
+Response contains one-time `bindToken` and instructions.
+
+2) User opens bot in Teams and sends:
+
+```text
+LINK <bindToken>
+```
+
+Bot stores mapping `email -> conversationId` for that user conversation.
+
+3) 1C resolves conversation by email:
+
+```bash
+curl -X GET "http://localhost:3978/conversation/by-email?email=ihor.neshyk@ukroliya.com" \
+  -H "Authorization: Bearer <token>"
+```
+
+Then use returned `conversationId` in `POST /send`.
 
 ## Azure Deploy
 
@@ -186,8 +293,7 @@ az webapp config appsettings set \
     AZURE_STORAGE_CONNECTION_STRING="<storageConnectionString>" \
     AZURE_QUEUE_NAME="teams-updates" \
     AZURE_TABLE_NAME="ConversationReferences" \
-    API_BEARER_TOKEN="<strongSharedToken>" \
-    DEFAULT_TARGET="default"
+    API_BEARER_TOKEN="<strongSharedToken>"
 ```
 
 Or use helper script:
@@ -220,6 +326,7 @@ Or create/register bot via script:
 - Delivery is at-least-once; 1C must deduplicate by `activityId` or `updateId`.
 - Queue payload size should remain under Azure Queue limits.
 - `conversation reference` is saved on every inbound Teams activity.
+- `bindToken` is one-time and has configurable TTL via `BIND_TOKEN_TTL_DAYS` (default 365 days).
 
 ## E2E Tests (Ihor)
 

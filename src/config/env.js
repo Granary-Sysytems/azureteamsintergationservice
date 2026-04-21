@@ -17,6 +17,11 @@ function readConfig(env = process.env) {
     throw new Error("PORT must be a positive integer");
   }
 
+  const bindTokenTtlDays = Number.parseInt(env.BIND_TOKEN_TTL_DAYS || "365", 10);
+  if (Number.isNaN(bindTokenTtlDays) || bindTokenTtlDays <= 0) {
+    throw new Error("BIND_TOKEN_TTL_DAYS must be a positive integer");
+  }
+
   return {
     port,
     botAppId: env.BOT_APP_ID,
@@ -26,7 +31,7 @@ function readConfig(env = process.env) {
     queueName: env.AZURE_QUEUE_NAME || "teams-updates",
     tableName: env.AZURE_TABLE_NAME || "ConversationReferences",
     apiBearerToken: env.API_BEARER_TOKEN,
-    defaultTarget: env.DEFAULT_TARGET || "default",
+    bindTokenTtlMs: bindTokenTtlDays * 24 * 60 * 60 * 1000,
   };
 }
 

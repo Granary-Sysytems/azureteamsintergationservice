@@ -20,12 +20,25 @@ function createUpdate(activity, type, data) {
 }
 
 function formatActionConfirmation(data) {
+  const actionTitle =
+    data &&
+    (typeof data.__actionTitle === "string"
+      ? data.__actionTitle.trim()
+      : typeof data.actionTitle === "string"
+        ? data.actionTitle.trim()
+        : "");
   const actionValue = data && typeof data.action === "string" ? data.action : null;
-  if (!actionValue) {
-    return "✅ Вашу відповідь зафіксовано.";
+  const displayAction = actionTitle || actionValue;
+
+  if (displayAction) {
+    return `✅ Обрано: ${displayAction}`;
   }
 
-  return `✅ Обрано: ${actionValue}`;
+  return "✅ Вашу відповідь зафіксовано.";
 }
 
-module.exports = { mapTenantId, createUpdate, formatActionConfirmation };
+module.exports = {
+  mapTenantId,
+  createUpdate,
+  formatActionConfirmation,
+};

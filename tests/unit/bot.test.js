@@ -1,6 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { ActivityHandler } = require("botbuilder");
 const { createBot } = require("../../src/bot/bot");
+const {
+  buildSubmittedStateCard,
+  sanitizeActionData,
+  extractBindToken,
+} = require("../../src/bot/TeamsIntegrationBot");
 const {
   mapTenantId,
   createUpdate,
@@ -42,6 +48,10 @@ test("createUpdate maps activity fields into queue payload", () => {
 test("formatActionConfirmation renders action specific and fallback texts", () => {
   assert.equal(formatActionConfirmation({ action: "approve" }), "✅ Обрано: approve");
   assert.equal(
+    formatActionConfirmation({ action: "approve", __actionTitle: "Погодити заявку" }),
+    "✅ Обрано: Погодити заявку",
+  );
+  assert.equal(
     formatActionConfirmation({}),
     "✅ Вашу відповідь зафіксовано.",
   );
@@ -68,4 +78,129 @@ test("bot onInvokeActivity enqueues adaptive card execute updates", async () => 
   assert.equal(updates.length, 1);
   assert.equal(updates[0].type, "card.execute");
   assert.deepEqual(updates[0].data, { action: "approve", requestId: "R1" });
+});
+
+test("bot run stores reference with extracted email", async () => {
+  const saveCalls = [];
+  const bot = createBot({
+    enqueueUpdate: async () => {},
+    saveConversationReference: async (...args) => saveCalls.push(args),
+  });
+
+  const originalRun = ActivityHandler.prototype.run;
+  ActivityHandler.prototype.run = async () => {};
+
+  try {
+    await bot.run({
+      activity: {
+        id: "m1",
+        channelId: "msteams",
+        serviceUrl: "https://smba.trafficmanager.net/emea/",
+        conversation: { id: "conv-1" },
+        recipient: { id: "bot-id" },
+        from: { id: "user-id", userPrincipalName: "ihor.neshyk@ukroliya.com" },
+      },
+    });
+  } finally {
+    ActivityHandler.prototype.run = originalRun;
+  }
+
+  assert.equal(saveCalls.length, 1);
+  assert.equal(saveCalls[0][0].conversation.id, "conv-1");
+  assert.equal(saveCalls[0].length, 1);
+});
+
+test("buildSubmittedStateCard keeps original card body and single selected action", () => {
+  const card = buildSubmittedStateCard({
+    action: "approve",
+    requestId: "REQ-1",
+    __actionTitle: "Approve",
+    __originalCard: {
+      $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+      type: "AdaptiveCard",
+      version: "1.5",
+      body: [{ type: "TextBlock", text: "Original body stays" }],
+    },
+  });
+
+  assert.equal(card.type, "AdaptiveCard");
+  assert.equal(card.body[0].text, "Original body stays");
+  assert.equal(card.actions.length, 0);
+  assert.equal(card.body[1].text, "Обрана дія: Approve");
+});
+
+test("buildSubmittedStateCard converts input fields to read-only submitted values", () => {
+  const card = buildSubmittedStateCard({
+    action: "reject_or_request_clarification",
+    __actionTitle: "Відхилити",
+    comment: "Потрібно виправити суму",
+    amount: "1500",
+    __originalCard: {
+      $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+      type: "AdaptiveCard",
+      version: "1.5",
+      body: [
+        { type: "TextBlock", text: "Запит на погодження" },
+        { type: "Input.Text", id: "comment", label: "Коментар" },
+        { type: "Input.Number", id: "amount", label: "Сума" },
+      ],
+      actions: [],
+    },
+  });
+
+  assert.equal(card.actions.length, 0);
+  assert.equal(card.body[0].text, "Запит на погодження");
+  assert.equal(card.body[1].type, "TextBlock");
+  assert.match(card.body[1].text, /Коментар: \*\*Потрібно виправити суму\*\*/);
+  assert.equal(card.body[2].type, "TextBlock");
+  assert.match(card.body[2].text, /Сума: \*\*1500\*\*/);
+});
+
+test("buildSubmittedStateCard resolves choice set value to title", () => {
+  const card = buildSubmittedStateCard({
+    action: "reject_or_request_clarification",
+    __actionTitle: "Відхилити",
+    ownershipType: "storage",
+    __originalCard: {
+      $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+      type: "AdaptiveCard",
+      version: "1.5",
+      body: [
+        {
+          type: "Input.ChoiceSet",
+          id: "ownershipType",
+          label: "Форма власності",
+          style: "compact",
+          choices: [
+            { title: "Власне", value: "own" },
+            { title: "Зберігання", value: "storage" },
+          ],
+        },
+      ],
+      actions: [],
+    },
+  });
+
+  assert.equal(card.body[0].type, "TextBlock");
+  assert.match(card.body[0].text, /Форма власності: \*\*Зберігання\*\*/);
+});
+
+test("sanitizeActionData removes internal action metadata", () => {
+  const data = sanitizeActionData({
+    action: "approve",
+    requestId: "REQ-1",
+    _locked: true,
+    __actionTitle: "Approve",
+    __originalCard: { body: [] },
+    __requiredFields: ["comment", "amount"],
+    __amountRule: "positive",
+  });
+
+  assert.deepEqual(data, { action: "approve", requestId: "REQ-1" });
+});
+
+test("extractBindToken parses LINK command and ignores other text", () => {
+  assert.equal(extractBindToken("LINK abcDEF123"), "abcDEF123");
+  assert.equal(extractBindToken(" link   token-1 "), "token-1");
+  assert.equal(extractBindToken("hello"), null);
 });

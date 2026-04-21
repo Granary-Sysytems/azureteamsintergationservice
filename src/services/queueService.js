@@ -17,7 +17,7 @@ function createQueueService(queueClient) {
     const boundedMax = Math.max(1, Math.min(Number(max) || 10, 32));
     const messages = await queueClient.receiveMessages({
       numberOfMessages: boundedMax,
-      visibilityTimeout: 120,
+      visibilityTimeout: 15,
     });
 
     return (messages.receivedMessageItems || []).map((message) => {
