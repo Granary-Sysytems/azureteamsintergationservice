@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
   "manifestVersion": "1.16",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "id": "cdc894ed-aa34-47ab-9dd2-f86b48e7418f",
   "packageName": "com.ukroliya.teamsbot.org",
   "developer": {
@@ -27,7 +27,9 @@
     {
       "botId": "d4686449-be3c-46b1-95c0-adf14f74c6ee",
       "scopes": [
-        "personal"
+        "personal",
+        "groupchat",
+        "team"
       ],
       "supportsFiles": false,
       "isNotificationOnly": false
