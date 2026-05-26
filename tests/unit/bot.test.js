@@ -185,6 +185,58 @@ test("buildSubmittedStateCard resolves choice set value to title", () => {
   assert.match(card.body[0].text, /Форма власності: \*\*Зберігання\*\*/);
 });
 
+test("buildSubmittedStateCard renders toggle checkmarks and selected request ids", () => {
+  const card = buildSubmittedStateCard({
+    action: "approve_selected",
+    __actionTitle: "Погодити",
+    selectionInputIds: ["sel_123", "sel_124", "sel_125"],
+    candidateRequestIds: ["123", "124", "125"],
+    sel_123: "false",
+    sel_124: "true",
+    sel_125: false,
+    __originalCard: {
+      $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+      type: "AdaptiveCard",
+      version: "1.5",
+      body: [
+        {
+          type: "Table",
+          rows: [
+            {
+              type: "TableRow",
+              cells: [
+                {
+                  type: "TableCell",
+                  items: [{ type: "Input.Toggle", id: "sel_123", title: "" }],
+                },
+              ],
+            },
+            {
+              type: "TableRow",
+              cells: [
+                {
+                  type: "TableCell",
+                  items: [{ type: "Input.Toggle", id: "sel_124", title: "" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      actions: [],
+    },
+  });
+
+  const toggleCell1 = card.body[0].rows[0].cells[0].items[0];
+  const toggleCell2 = card.body[0].rows[1].cells[0].items[0];
+  assert.equal(toggleCell1.type, "TextBlock");
+  assert.equal(toggleCell1.text, "☐");
+  assert.equal(toggleCell2.type, "TextBlock");
+  assert.equal(toggleCell2.text, "☑");
+  assert.equal(card.body[1].text, "Обрана дія: Погодити");
+  assert.equal(card.body[2].text, "Відмічені заявки: 124");
+});
+
 test("sanitizeActionData removes internal action metadata", () => {
   const data = sanitizeActionData({
     action: "approve",

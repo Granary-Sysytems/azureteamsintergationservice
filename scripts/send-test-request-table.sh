@@ -18,14 +18,42 @@ fi
 REQUEST_ID="REQ-TABLE-$(date +%s)"
 NOW_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
+CONVERSATION_RESPONSE="$(
+  curl --silent --show-error --fail \
+    -X GET "${SERVICE_BASE_URL}/conversation/by-email?email=${TARGET_EMAIL}" \
+    -H "Authorization: Bearer ${API_BEARER_TOKEN}" \
+    -H "Content-Type: application/json"
+)"
+
+CONVERSATION_ID="$(
+  printf "%s" "${CONVERSATION_RESPONSE}" | node -e '
+let data = "";
+process.stdin.on("data", (chunk) => (data += chunk));
+process.stdin.on("end", () => {
+  try {
+    const json = JSON.parse(data);
+    if (!json.conversationId) {
+      process.exit(2);
+    }
+    process.stdout.write(json.conversationId);
+  } catch (_error) {
+    process.exit(2);
+  }
+});
+'
+)"
+
 read -r -d '' PAYLOAD <<EOF || true
 {
-  "target": "${TARGET_EMAIL}",
+  "conversationId": "${CONVERSATION_ID}",
   "text": "Тестове погодження заявки (${REQUEST_ID})",
   "adaptiveCard": {
     "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
     "type": "AdaptiveCard",
     "version": "1.5",
+    "msteams": {
+      "width": "Full"
+    },
     "body": [
       {
         "type": "TextBlock",
@@ -45,56 +73,56 @@ read -r -d '' PAYLOAD <<EOF || true
         "firstRowAsHeaders": true,
         "showGridLines": true,
         "columns": [
-          { "width": 1 },
-          { "width": 1 },
-          { "width": 2 },
-          { "width": 2 },
-          { "width": 1 },
-          { "width": 1 }
+          { "width": 0.6 },
+          { "width": 0.8 },
+          { "width": 1.4 },
+          { "width": 1.8 },
+          { "width": 0.8 },
+          { "width": 1.2 }
         ],
         "rows": [
           {
             "type": "TableRow",
             "cells": [
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "checkbox", "weight": "Bolder" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "№ заявки", "weight": "Bolder" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Постачальник", "weight": "Bolder" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Вид соняшника", "weight": "Bolder" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Кількість т", "weight": "Bolder" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Ціна грн/т", "weight": "Bolder" }] }
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "✓", "weight": "Bolder", "horizontalAlignment": "Center" }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "№", "weight": "Bolder" }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Постач.", "weight": "Bolder", "wrap": true }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Вид", "weight": "Bolder", "wrap": true }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "т", "weight": "Bolder", "horizontalAlignment": "Right" }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "грн/т", "weight": "Bolder", "horizontalAlignment": "Right" }] }
             ]
           },
           {
             "type": "TableRow",
             "cells": [
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "☑" }] },
+              { "type": "TableCell", "items": [{ "type": "Input.Toggle", "id": "sel_123", "valueOn": "true", "valueOff": "false", "value": "true", "title": "" }] },
               { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "123" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Вітчизна" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "соняшник" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "150" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "35000" }] }
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Вітчизна", "wrap": true }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "соняшник", "wrap": true }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "150", "horizontalAlignment": "Right" }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "35 000", "horizontalAlignment": "Right" }] }
             ]
           },
           {
             "type": "TableRow",
             "cells": [
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "☑" }] },
+              { "type": "TableCell", "items": [{ "type": "Input.Toggle", "id": "sel_124", "valueOn": "true", "valueOff": "false", "value": "true", "title": "" }] },
               { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "124" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Обрій" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "соняшник BO" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "500" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "36500" }] }
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Обрій", "wrap": true }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "соняшник BO", "wrap": true }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "500", "horizontalAlignment": "Right" }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "36 500", "horizontalAlignment": "Right" }] }
             ]
           },
           {
             "type": "TableRow",
             "cells": [
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "☑" }] },
+              { "type": "TableCell", "items": [{ "type": "Input.Toggle", "id": "sel_125", "valueOn": "true", "valueOff": "false", "value": "true", "title": "" }] },
               { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "125" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Ферма" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "соняшник" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "1500" }] },
-              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "35500" }] }
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "Ферма", "wrap": true }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "соняшник", "wrap": true }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "1 500", "horizontalAlignment": "Right" }] },
+              { "type": "TableCell", "items": [{ "type": "TextBlock", "text": "35 500", "horizontalAlignment": "Right" }] }
             ]
           }
         ]
@@ -107,7 +135,8 @@ read -r -d '' PAYLOAD <<EOF || true
         "data": {
           "action": "approve_selected",
           "requestId": "${REQUEST_ID}",
-          "selectedRequestIds": ["123", "124", "125"]
+          "selectionInputIds": ["sel_123", "sel_124", "sel_125"],
+          "candidateRequestIds": ["123", "124", "125"]
         }
       },
       {

@@ -45,6 +45,43 @@ function toDisplayText(value) {
   return JSON.stringify(value);
 }
 
+function isSelectedValue(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "yes";
+  }
+
+  return false;
+}
+
+function getSelectedRequestIds(data = {}) {
+  const selectionInputIds = Array.isArray(data.selectionInputIds)
+    ? data.selectionInputIds.filter((id) => typeof id === "string" && id.trim())
+    : [];
+  const candidateRequestIds = Array.isArray(data.candidateRequestIds)
+    ? data.candidateRequestIds
+        .map((id) => (id === null || id === undefined ? "" : String(id).trim()))
+        .filter(Boolean)
+    : [];
+
+  if (selectionInputIds.length > 0 && candidateRequestIds.length > 0) {
+    return selectionInputIds
+      .map((inputId, index) =>
+        isSelectedValue(data[inputId]) ? candidateRequestIds[index] || null : null,
+      )
+      .filter(Boolean);
+  }
+
+  return Object.entries(data)
+    .filter(([key, value]) => key.startsWith("sel_") && isSelectedValue(value))
+    .map(([key]) => key.replace(/^sel_/, ""))
+    .filter(Boolean);
+}
+
 function convertInputToReadOnly(element, submittedData) {
   const inputId =
     typeof element.id === "string" && element.id.trim() ? element.id.trim() : null;
@@ -67,6 +104,16 @@ function convertInputToReadOnly(element, submittedData) {
       rawValue = selected.title.trim();
     }
   }
+
+  if (element.type === "Input.Toggle") {
+    return {
+      type: "TextBlock",
+      spacing: element.spacing || "Small",
+      horizontalAlignment: "Center",
+      text: isSelectedValue(rawValue) ? "☑" : "☐",
+    };
+  }
+
   const value = toDisplayText(rawValue);
 
   return {
@@ -119,6 +166,7 @@ function buildSubmittedStateCard(data = {}) {
     const body = Array.isArray(originalCard.body)
       ? freezeSubmittedInputs(originalCard.body, data)
       : [];
+    const selectedRequestIds = getSelectedRequestIds(data);
     body.push({
       type: "TextBlock",
       spacing: "Medium",
@@ -126,6 +174,14 @@ function buildSubmittedStateCard(data = {}) {
       wrap: true,
       text: `Обрана дія: ${selectedTitle}`,
     });
+    if (selectedRequestIds.length > 0) {
+      body.push({
+        type: "TextBlock",
+        spacing: "Small",
+        wrap: true,
+        text: `Відмічені заявки: ${selectedRequestIds.join(", ")}`,
+      });
+    }
 
     return {
       ...originalCard,
