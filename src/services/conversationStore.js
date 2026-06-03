@@ -56,6 +56,48 @@ function createConversationStore(tableClient) {
     );
   }
 
+  async function findThreadedReferenceForChannel(conversationId) {
+    if (typeof tableClient.listEntities !== "function") {
+      return null;
+    }
+
+    const threadPrefix = `${buildRowKey("conversationId", conversationId)}${encodeURIComponent(
+      ";messageid=",
+    )}`;
+    const upperBound = `${threadPrefix}~`;
+    const filter = `PartitionKey eq '${PARTITION_KEY}' and RowKey ge '${threadPrefix}' and RowKey lt '${upperBound}'`;
+
+    try {
+      for await (const entity of tableClient.listEntities({
+        queryOptions: { filter },
+      })) {
+        if (!entity || !entity.reference) {
+          continue;
+        }
+        try {
+          const reference = JSON.parse(entity.reference);
+          if (!reference?.conversation) {
+            continue;
+          }
+          reference.conversation = {
+            ...reference.conversation,
+            id: conversationId,
+            conversationType: "channel",
+            isGroup: true,
+          };
+          delete reference.activityId;
+          return reference;
+        } catch (_error) {
+          // skip malformed entries
+        }
+      }
+    } catch (_error) {
+      return null;
+    }
+
+    return null;
+  }
+
   async function getReferenceByConversationId(conversationId) {
     try {
       const entity = await tableClient.getEntity(
@@ -64,11 +106,22 @@ function createConversationStore(tableClient) {
       );
       return JSON.parse(entity.reference);
     } catch (error) {
-      if (error.statusCode === 404) {
-        return null;
+      if (error.statusCode !== 404) {
+        throw error;
       }
-      throw error;
     }
+
+    const fallback = await findThreadedReferenceForChannel(conversationId);
+    if (!fallback) {
+      return null;
+    }
+
+    try {
+      await saveConversationReference(fallback);
+    } catch (_error) {
+      // best-effort cache; ignore write failures
+    }
+    return fallback;
   }
 
   async function getReferenceByTarget(target) {

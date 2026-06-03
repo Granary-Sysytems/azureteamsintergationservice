@@ -6,6 +6,8 @@ function createAzureClients({
   storageConnectionString,
   queueName,
   tableName,
+  attachmentContainerName,
+  attachmentAccessPolicyId,
 }) {
   const queueServiceClient = QueueServiceClient.fromConnectionString(
     storageConnectionString,
@@ -19,6 +21,8 @@ function createAzureClients({
 
   const fileAttachmentService = createFileAttachmentService({
     storageConnectionString,
+    ...(attachmentContainerName ? { containerName: attachmentContainerName } : {}),
+    ...(attachmentAccessPolicyId ? { accessPolicyId: attachmentAccessPolicyId } : {}),
   });
 
   return {

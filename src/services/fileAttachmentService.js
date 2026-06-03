@@ -31,6 +31,42 @@ function normalizeBinaryFileName(fileName) {
   return path.basename(candidate);
 }
 
+const OFFICE_VIEWER_EXTENSIONS = new Set([
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+]);
+
+function buildViewUrl(downloadUrl, fileName) {
+  if (typeof downloadUrl !== "string" || !downloadUrl) {
+    return null;
+  }
+
+  const ext = String(fileName || "")
+    .split(".")
+    .pop()
+    .toLowerCase();
+
+  if (!OFFICE_VIEWER_EXTENSIONS.has(ext)) {
+    return null;
+  }
+
+  return `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(
+    downloadUrl,
+  )}`;
+}
+
+function buildContentDisposition(fileName, disposition = "inline") {
+  const asciiFallback = String(fileName || "file")
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/["\\]/g, "_");
+  const encoded = encodeURIComponent(String(fileName || "file"));
+  return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
+}
+
 function decodeBase64(base64Body) {
   const normalized = String(base64Body || "").trim();
   const withoutDataPrefix = normalized.includes(",")
@@ -58,6 +94,9 @@ function decodeBase64(base64Body) {
 function createFileAttachmentService({
   storageConnectionString,
   containerName = "teams-attachments",
+  editableLinks = true,
+  accessPolicyId = null,
+  sasTtlMs = 30 * 24 * 60 * 60 * 1000,
 }, deps = {}) {
   if (!storageConnectionString) {
     throw new Error("storageConnectionString is required");
@@ -77,6 +116,8 @@ function createFileAttachmentService({
     ((name, key) => new StorageSharedKeyCredential(name, key));
   const createSas =
     deps.generateBlobSasQueryParameters || generateBlobSASQueryParameters;
+  const parseSasPermissions =
+    deps.parseBlobSasPermissions || BlobSASPermissions.parse;
   const createUuid = deps.createUuid || crypto.randomUUID;
   const now = deps.now || (() => Date.now());
 
@@ -95,17 +136,31 @@ function createFileAttachmentService({
   }
 
   function createDownloadUrl(blobClient, blobName) {
-    const expiresOn = new Date(now() + 60 * 60 * 1000);
-    const sas = createSas(
-      {
+    const policyId =
+      typeof accessPolicyId === "string" && accessPolicyId.trim()
+        ? accessPolicyId.trim()
+        : null;
+
+    let sasOptions;
+    if (policyId) {
+      // Permissions and expiry are governed by the stored access policy in Azure.
+      sasOptions = {
         containerName,
         blobName,
-        permissions: BlobSASPermissions.parse("r"),
+        identifier: policyId,
+      };
+    } else {
+      const permissionSet = editableLinks ? "rw" : "r";
+      sasOptions = {
+        containerName,
+        blobName,
+        permissions: parseSasPermissions(permissionSet),
         startsOn: new Date(now() - 5 * 60 * 1000),
-        expiresOn,
-      },
-      sharedKeyCredential,
-    ).toString();
+        expiresOn: new Date(now() + sasTtlMs),
+      };
+    }
+
+    const sas = createSas(sasOptions, sharedKeyCredential).toString();
 
     return `${blobClient.url}?${sas}`;
   }
@@ -130,12 +185,13 @@ function createFileAttachmentService({
     await blobClient.uploadData(Buffer.from(content, "utf8"), {
       blobHTTPHeaders: {
         blobContentType: "text/plain; charset=utf-8",
+        blobContentDisposition: buildContentDisposition(fileName),
       },
     });
 
     const downloadUrl = createDownloadUrl(blobClient, blobName);
 
-    return { fileName, downloadUrl };
+    return { fileName, downloadUrl, viewUrl: buildViewUrl(downloadUrl, fileName) };
   }
 
   async function uploadBinaryFile(base64File) {
@@ -165,13 +221,17 @@ function createFileAttachmentService({
     await blobClient.uploadData(binary, {
       blobHTTPHeaders: {
         blobContentType: contentType,
+        blobContentDisposition: buildContentDisposition(fileName),
       },
     });
+
+    const downloadUrl = createDownloadUrl(blobClient, blobName);
 
     return {
       fileName,
       contentType,
-      downloadUrl: createDownloadUrl(blobClient, blobName),
+      downloadUrl,
+      viewUrl: buildViewUrl(downloadUrl, fileName),
     };
   }
 

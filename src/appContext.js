@@ -13,6 +13,8 @@ function createAppContext() {
     storageConnectionString: config.storageConnectionString,
     queueName: config.queueName,
     tableName: config.tableName,
+    attachmentContainerName: config.attachmentContainerName,
+    attachmentAccessPolicyId: config.attachmentAccessPolicyId,
   });
 
   const queueService = createQueueService(queueClient);

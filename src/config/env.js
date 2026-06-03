@@ -30,6 +30,8 @@ function readConfig(env = process.env) {
     storageConnectionString: env.AZURE_STORAGE_CONNECTION_STRING,
     queueName: env.AZURE_QUEUE_NAME || "teams-updates",
     tableName: env.AZURE_TABLE_NAME || "ConversationReferences",
+    attachmentContainerName: env.AZURE_BLOB_CONTAINER || "teams-attachments",
+    attachmentAccessPolicyId: env.AZURE_BLOB_SAS_POLICY_ID || null,
     apiBearerToken: env.API_BEARER_TOKEN,
     bindTokenTtlMs: bindTokenTtlDays * 24 * 60 * 60 * 1000,
   };

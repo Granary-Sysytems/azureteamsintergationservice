@@ -162,7 +162,8 @@ async function buildOutgoingActivity(
       const uploadedFile = await uploadTextFile(normalizedTextFile);
       if (uploadedFile && uploadedFile.downloadUrl && uploadedFile.fileName) {
         uploadedFiles.push(uploadedFile);
-        const fileLink = `[${uploadedFile.fileName}](${uploadedFile.downloadUrl})`;
+        const linkTarget = uploadedFile.viewUrl || uploadedFile.downloadUrl;
+        const fileLink = `[${uploadedFile.fileName}](${linkTarget})`;
         linkLines.push(`Attachment: ${fileLink}`);
       }
     } else {
@@ -178,7 +179,8 @@ async function buildOutgoingActivity(
         const uploadedFile = await uploadBinaryFile(normalizedBase64File);
         if (uploadedFile && uploadedFile.downloadUrl && uploadedFile.fileName) {
           uploadedFiles.push(uploadedFile);
-          const fileLink = `[${uploadedFile.fileName}](${uploadedFile.downloadUrl})`;
+          const linkTarget = uploadedFile.viewUrl || uploadedFile.downloadUrl;
+          const fileLink = `[${uploadedFile.fileName}](${linkTarget})`;
           linkLines.push(`Attachment: ${fileLink}`);
         }
       } catch (error) {

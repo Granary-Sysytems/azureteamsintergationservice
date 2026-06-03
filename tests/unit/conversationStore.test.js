@@ -53,11 +53,101 @@ test("getReferenceByConversationId returns parsed reference", async () => {
     getEntity: async (_pk, rowKey) => ({
       reference: JSON.stringify({ conversation: { id: rowKey } }),
     }),
+    listEntities: () => ({ [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true }) }) }),
   };
   const store = createConversationStore(tableClient);
 
   const result = await store.getReferenceByConversationId("conv-1");
   assert.equal(result.conversation.id, "conversationId:conv-1");
+});
+
+test("getReferenceByConversationId falls back to threaded reference and rewrites conversation.id", async () => {
+  const channelId = "19:abc@thread.tacv2";
+  const threadedRowKey = `conversationId:${encodeURIComponent(`${channelId};messageid=42`)}`;
+  const listCalls = [];
+  const upserts = [];
+  const tableClient = {
+    createTable: async () => {},
+    upsertEntity: async (entity, mode) => {
+      upserts.push({ entity, mode });
+    },
+    getEntity: async () => {
+      const err = new Error("not found");
+      err.statusCode = 404;
+      throw err;
+    },
+    listEntities: (options) => {
+      listCalls.push(options);
+      const entries = [
+        {
+          partitionKey: "teams",
+          rowKey: threadedRowKey,
+          reference: JSON.stringify({
+            conversation: {
+              id: `${channelId};messageid=42`,
+              conversationType: "channel",
+              isGroup: true,
+              tenantId: "tenant-1",
+            },
+            activityId: "act-1",
+            serviceUrl: "https://example.invalid",
+          }),
+        },
+      ];
+      return {
+        [Symbol.asyncIterator]: () => {
+          let i = 0;
+          return {
+            next: async () => {
+              if (i >= entries.length) return { done: true, value: undefined };
+              return { done: false, value: entries[i++] };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const store = createConversationStore(tableClient);
+  const result = await store.getReferenceByConversationId(channelId);
+
+  assert.ok(result, "expected fallback reference");
+  assert.equal(result.conversation.id, channelId);
+  assert.equal(result.conversation.conversationType, "channel");
+  assert.equal(result.conversation.isGroup, true);
+  assert.equal(result.activityId, undefined);
+  assert.equal(listCalls.length, 1);
+  assert.match(
+    listCalls[0].queryOptions.filter,
+    /RowKey ge 'conversationId:19%3Aabc%40thread\.tacv2%3Bmessageid%3D'/,
+  );
+  assert.match(
+    listCalls[0].queryOptions.filter,
+    /RowKey lt 'conversationId:19%3Aabc%40thread\.tacv2%3Bmessageid%3D~'/,
+  );
+  assert.equal(upserts.length, 1);
+  assert.equal(
+    upserts[0].entity.rowKey,
+    `conversationId:${encodeURIComponent(channelId)}`,
+  );
+});
+
+test("getReferenceByConversationId returns null when neither exact nor threaded entry exists", async () => {
+  const tableClient = {
+    createTable: async () => {},
+    upsertEntity: async () => {},
+    getEntity: async () => {
+      const err = new Error("not found");
+      err.statusCode = 404;
+      throw err;
+    },
+    listEntities: () => ({
+      [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true }) }),
+    }),
+  };
+  const store = createConversationStore(tableClient);
+  const result = await store.getReferenceByConversationId("19:absent@thread.tacv2");
+  assert.equal(result, null);
 });
 
 test("saveConversationReference writes only conversation index when no target provided", async () => {
