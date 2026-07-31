@@ -42,6 +42,96 @@ function parseNumericFields(existingData, requiredFields) {
   return requiredFields.filter((field) => field === "amount" || field === "price");
 }
 
+function collectCardText(node, out) {
+  if (Array.isArray(node)) {
+    node.forEach((item) => collectCardText(item, out));
+    return;
+  }
+
+  if (!node || typeof node !== "object") {
+    return;
+  }
+
+  const type = typeof node.type === "string" ? node.type : "";
+
+  if (type === "TextBlock" && node.text != null) {
+    const text = String(node.text).trim();
+    if (text) {
+      out.push(text);
+    }
+    return;
+  }
+
+  if (type === "RichTextBlock" && Array.isArray(node.inlines)) {
+    const text = node.inlines
+      .map((inline) =>
+        typeof inline === "string" ? inline : inline && inline.text ? inline.text : "",
+      )
+      .join("")
+      .trim();
+    if (text) {
+      out.push(text);
+    }
+    return;
+  }
+
+  if (type === "FactSet" && Array.isArray(node.facts)) {
+    node.facts.forEach((fact) => {
+      const title = fact && fact.title != null ? String(fact.title).trim() : "";
+      const value = fact && fact.value != null ? String(fact.value).trim() : "";
+      const normalizedTitle = title.replace(/:\s*$/, "");
+      let line;
+      if (normalizedTitle && value) {
+        line = `${normalizedTitle}: ${value}`;
+      } else {
+        line = `${normalizedTitle}${value}`.trim();
+      }
+      if (line) {
+        out.push(line);
+      }
+    });
+    return;
+  }
+
+  if (type === "Table" && Array.isArray(node.rows)) {
+    node.rows.forEach((row) => {
+      if (!row || !Array.isArray(row.cells)) {
+        return;
+      }
+      const cells = row.cells.map((cell) => {
+        const cellOut = [];
+        collectCardText(cell && cell.items, cellOut);
+        return cellOut.join(" ").trim();
+      });
+      const line = cells.join(" | ").trim();
+      if (line.replace(/\|/g, "").trim()) {
+        out.push(line);
+      }
+    });
+    return;
+  }
+
+  if (type.startsWith("Input.") || type === "Image" || type === "ActionSet") {
+    return;
+  }
+
+  if (Array.isArray(node.items)) {
+    collectCardText(node.items, out);
+  }
+  if (Array.isArray(node.columns)) {
+    collectCardText(node.columns, out);
+  }
+}
+
+function cardToPlainText(adaptiveCard) {
+  if (!adaptiveCard || typeof adaptiveCard !== "object") {
+    return "";
+  }
+  const out = [];
+  collectCardText(adaptiveCard.body, out);
+  return out.join("\n").trim();
+}
+
 function enrichAdaptiveCard(adaptiveCard) {
   const card = cloneJson(adaptiveCard);
   const cardSnapshot = { ...card };
@@ -77,6 +167,29 @@ function enrichAdaptiveCard(adaptiveCard) {
       }
       return action;
     });
+  }
+
+  const copyText = cardToPlainText(card);
+  if (copyText) {
+    const copyBlockId = "__copyText";
+    card.body = [
+      ...(Array.isArray(card.body) ? card.body : []),
+      {
+        type: "TextBlock",
+        id: copyBlockId,
+        isVisible: false,
+        wrap: true,
+        text: copyText,
+      },
+    ];
+    card.actions = [
+      ...(Array.isArray(card.actions) ? card.actions : []),
+      {
+        type: "Action.ToggleVisibility",
+        title: "📋 Текст для копіювання",
+        targetElements: [copyBlockId],
+      },
+    ];
   }
 
   return card;
@@ -214,4 +327,4 @@ async function buildOutgoingActivity(
   };
 }
 
-module.exports = { buildOutgoingActivity };
+module.exports = { buildOutgoingActivity, cardToPlainText };

@@ -5,3 +5,9 @@ node_modules
 config/azure.env
 config/azure.secrets.env
 .env.e2e
+
+# Build & log artifacts
+deploy.zip
+*.app.zip
+app_logs/
+app_logs.zip

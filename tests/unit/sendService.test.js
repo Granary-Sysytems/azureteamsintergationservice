@@ -47,6 +47,72 @@ test("buildOutgoingActivity builds adaptive card and file attachment", async () 
   assert.equal(result.uploadedFiles.length, 1);
 });
 
+test("buildOutgoingActivity adds hidden copy text block and toggle action", async () => {
+  const result = await buildOutgoingActivity({
+    adaptiveCard: {
+      $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+      type: "AdaptiveCard",
+      version: "1.5",
+      body: [
+        { type: "TextBlock", weight: "Bolder", text: "Погодити наказ" },
+        { type: "TextBlock", text: "Наказ: 000000006" },
+        {
+          type: "FactSet",
+          facts: [
+            { title: "Сировина", value: "Соняшник" },
+            { title: "Ціна:", value: "32 000 грн/т" },
+          ],
+        },
+        {
+          type: "Table",
+          rows: [
+            {
+              type: "TableRow",
+              cells: [
+                { type: "TableCell", items: [{ type: "TextBlock", text: "123" }] },
+                { type: "TableCell", items: [{ type: "TextBlock", text: "Вітчизна" }] },
+              ],
+            },
+          ],
+        },
+        { type: "Input.Text", id: "comment", label: "Коментар" },
+      ],
+      actions: [
+        {
+          type: "Action.Submit",
+          title: "Погодити",
+          data: { action: "approve_request", requestId: "REQ-1" },
+        },
+      ],
+    },
+  });
+
+  const card = result.activity.attachments[0].content;
+  const copyBlock = card.body.find((item) => item.id === "__copyText");
+  assert.ok(copyBlock, "expected hidden copy text block");
+  assert.equal(copyBlock.isVisible, false);
+  assert.match(copyBlock.text, /Погодити наказ/);
+  assert.match(copyBlock.text, /Наказ: 000000006/);
+  assert.match(copyBlock.text, /Сировина: Соняшник/);
+  assert.match(copyBlock.text, /Ціна: 32 000 грн\/т/);
+  assert.match(copyBlock.text, /123 \| Вітчизна/);
+  assert.doesNotMatch(copyBlock.text, /Коментар/);
+
+  const toggle = card.actions.find(
+    (action) => action.type === "Action.ToggleVisibility",
+  );
+  assert.ok(toggle, "expected toggle action");
+  assert.deepEqual(toggle.targetElements, ["__copyText"]);
+
+  // submit snapshot must not include the injected copy block
+  const submitData = card.actions.find((a) => a.type === "Action.Submit").data;
+  assert.ok(submitData.__originalCard);
+  assert.equal(
+    submitData.__originalCard.body.some((item) => item.id === "__copyText"),
+    false,
+  );
+});
+
 test("buildOutgoingActivity enriches adaptive card submit actions with snapshot", async () => {
   const result = await buildOutgoingActivity({
     adaptiveCard: {
