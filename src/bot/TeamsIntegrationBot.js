@@ -258,6 +258,18 @@ class TeamsIntegrationBot extends ActivityHandler {
       const hasCardPayload = Boolean(context.activity.value);
 
       if (hasCardPayload) {
+        if (context.activity.value && context.activity.value.__copyRequest) {
+          const copyText =
+            typeof context.activity.value.__copyText === "string"
+              ? context.activity.value.__copyText.trim()
+              : "";
+          await context.sendActivity(
+            copyText || "Немає тексту для копіювання.",
+          );
+          await next();
+          return;
+        }
+
         if (context.activity.value && context.activity.value._locked) {
           await context.sendActivity("Відповідь вже зафіксовано.");
           await next();

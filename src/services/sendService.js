@@ -22,11 +22,30 @@ function createSendService({
       uploadTextFile,
       uploadBinaryFile,
     });
+
+    const channelRootId = String(reference.conversation?.id || "").split(";")[0];
+    const wantsNewThread =
+      Boolean(payload.newThread) && channelRootId.includes("@thread");
+
     let response;
+    let newThreadId = null;
 
     try {
       await adapter.continueConversation(reference, async (turnContext) => {
-        response = await turnContext.sendActivity(outgoingActivity);
+        if (wantsNewThread) {
+          const connectorClient = turnContext.adapter.createConnectorClient(
+            turnContext.activity.serviceUrl,
+          );
+          const created = await connectorClient.conversations.createConversation({
+            isGroup: true,
+            channelData: { channel: { id: channelRootId } },
+            activity: outgoingActivity,
+          });
+          newThreadId = created?.id || null;
+          response = { id: created?.activityId || null };
+        } else {
+          response = await turnContext.sendActivity(outgoingActivity);
+        }
       });
     } catch (error) {
       const errorCode = error.statusCode || error.status;
@@ -40,12 +59,19 @@ function createSendService({
       );
     }
 
-    return {
+    const result = {
       status: "sent",
-      conversationId: reference.conversation?.id || payload.conversationId,
+      conversationId:
+        newThreadId || reference.conversation?.id || payload.conversationId,
       activityId: response?.id || null,
       uploadedFiles,
     };
+
+    if (newThreadId) {
+      result.threadId = newThreadId;
+    }
+
+    return result;
   }
 
   return { proactiveSend };

@@ -47,7 +47,7 @@ test("buildOutgoingActivity builds adaptive card and file attachment", async () 
   assert.equal(result.uploadedFiles.length, 1);
 });
 
-test("buildOutgoingActivity adds hidden copy text block and toggle action", async () => {
+test("buildOutgoingActivity adds copy request submit action with plain card text", async () => {
   const result = await buildOutgoingActivity({
     adaptiveCard: {
       $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -88,29 +88,32 @@ test("buildOutgoingActivity adds hidden copy text block and toggle action", asyn
   });
 
   const card = result.activity.attachments[0].content;
-  const copyBlock = card.body.find((item) => item.id === "__copyText");
-  assert.ok(copyBlock, "expected hidden copy text block");
-  assert.equal(copyBlock.isVisible, false);
-  assert.match(copyBlock.text, /Погодити наказ/);
-  assert.match(copyBlock.text, /Наказ: 000000006/);
-  assert.match(copyBlock.text, /Сировина: Соняшник/);
-  assert.match(copyBlock.text, /Ціна: 32 000 грн\/т/);
-  assert.match(copyBlock.text, /123 \| Вітчизна/);
-  assert.doesNotMatch(copyBlock.text, /Коментар/);
-
-  const toggle = card.actions.find(
-    (action) => action.type === "Action.ToggleVisibility",
+  const copyAction = card.actions.find(
+    (action) => action.data && action.data.__copyRequest,
   );
-  assert.ok(toggle, "expected toggle action");
-  assert.deepEqual(toggle.targetElements, ["__copyText"]);
+  assert.ok(copyAction, "expected copy request action");
+  assert.equal(copyAction.type, "Action.Submit");
+  assert.equal(copyAction.title, "📋 Текст для копіювання");
+  assert.match(copyAction.data.__copyText, /Погодити наказ/);
+  assert.match(copyAction.data.__copyText, /Наказ: 000000006/);
+  assert.match(copyAction.data.__copyText, /Сировина: Соняшник/);
+  assert.match(copyAction.data.__copyText, /Ціна: 32 000 грн\/т/);
+  assert.match(copyAction.data.__copyText, /123 \| Вітчизна/);
+  assert.doesNotMatch(copyAction.data.__copyText, /Коментар/);
 
-  // submit snapshot must not include the injected copy block
-  const submitData = card.actions.find((a) => a.type === "Action.Submit").data;
-  assert.ok(submitData.__originalCard);
+  // copy action must not be enriched with the original card snapshot
+  assert.equal(copyAction.data.__originalCard, undefined);
+
+  // no hidden text block injected into the card body
   assert.equal(
-    submitData.__originalCard.body.some((item) => item.id === "__copyText"),
+    card.body.some((item) => item.id === "__copyText"),
     false,
   );
+
+  const submitData = card.actions.find(
+    (a) => a.type === "Action.Submit" && a.data && a.data.action,
+  ).data;
+  assert.ok(submitData.__originalCard);
 });
 
 test("buildOutgoingActivity enriches adaptive card submit actions with snapshot", async () => {
@@ -273,6 +276,106 @@ test("proactiveSend resolves by conversation id when provided", async () => {
 
   assert.equal(result.status, "sent");
   assert.equal(usedReference.conversation.id, "conversation-explicit");
+});
+
+test("proactiveSend creates a new channel thread and returns its id", async () => {
+  let createParams = null;
+  let usedServiceUrl = null;
+  const connectorClient = {
+    conversations: {
+      createConversation: async (params) => {
+        createParams = params;
+        return {
+          id: "19:channel-abc@thread.tacv2;messageid=1799999999999",
+          activityId: "activity-thread-1",
+        };
+      },
+    },
+  };
+
+  const adapter = {
+    continueConversation: async (reference, callback) => {
+      await callback({
+        activity: { serviceUrl: reference.serviceUrl },
+        adapter: {
+          createConnectorClient: (serviceUrl) => {
+            usedServiceUrl = serviceUrl;
+            return connectorClient;
+          },
+        },
+        sendActivity: async () => {
+          throw new Error("sendActivity must not be used for new thread");
+        },
+      });
+    },
+  };
+
+  const sendService = createSendService({
+    adapter,
+    getReferenceByConversationId: async (conversationId) => ({
+      conversation: { id: conversationId },
+      channelId: "msteams",
+      serviceUrl: "https://smba.trafficmanager.net/emea/",
+      bot: { id: "bot-id" },
+    }),
+    getReferenceByTarget: async () => null,
+  });
+
+  const result = await sendService.proactiveSend({
+    conversationId: "19:channel-abc@thread.tacv2",
+    text: "New thread please",
+    newThread: true,
+  });
+
+  assert.equal(result.status, "sent");
+  assert.equal(result.conversationId, "19:channel-abc@thread.tacv2;messageid=1799999999999");
+  assert.equal(result.threadId, "19:channel-abc@thread.tacv2;messageid=1799999999999");
+  assert.equal(result.activityId, "activity-thread-1");
+  assert.equal(usedServiceUrl, "https://smba.trafficmanager.net/emea/");
+  assert.equal(createParams.isGroup, true);
+  assert.equal(createParams.channelData.channel.id, "19:channel-abc@thread.tacv2");
+});
+
+test("proactiveSend ignores newThread flag for non-channel conversations", async () => {
+  let sentActivity = null;
+  const adapter = {
+    continueConversation: async (_reference, callback) => {
+      await callback({
+        activity: { serviceUrl: "https://smba.trafficmanager.net/emea/" },
+        adapter: {
+          createConnectorClient: () => {
+            throw new Error("must not create connector client for personal chat");
+          },
+        },
+        sendActivity: async (activity) => {
+          sentActivity = activity;
+          return { id: "activity-personal-1" };
+        },
+      });
+    },
+  };
+
+  const sendService = createSendService({
+    adapter,
+    getReferenceByConversationId: async (conversationId) => ({
+      conversation: { id: conversationId },
+      channelId: "msteams",
+      serviceUrl: "https://smba.trafficmanager.net/emea/",
+      bot: { id: "bot-id" },
+    }),
+    getReferenceByTarget: async () => null,
+  });
+
+  const result = await sendService.proactiveSend({
+    conversationId: "a:personal-conversation-id",
+    text: "hello",
+    newThread: true,
+  });
+
+  assert.equal(result.status, "sent");
+  assert.equal(result.conversationId, "a:personal-conversation-id");
+  assert.equal(result.threadId, undefined);
+  assert.ok(sentActivity);
 });
 
 test("proactiveSend returns 404 when target reference is missing", async () => {

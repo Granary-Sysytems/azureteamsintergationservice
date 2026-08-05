@@ -110,6 +110,42 @@ test("bot run stores reference with extracted email", async () => {
   assert.equal(saveCalls[0].length, 1);
 });
 
+test("bot replies with plain text on copy request and does not enqueue update", async () => {
+  const updates = [];
+  const sent = [];
+  const bot = createBot({
+    enqueueUpdate: async (update) => updates.push(update),
+    saveConversationReference: async () => {},
+  });
+
+  await bot.run({
+    activity: {
+      type: "message",
+      id: "m-copy",
+      channelId: "msteams",
+      serviceUrl: "https://smba.trafficmanager.net/emea/",
+      conversation: { id: "conv-copy" },
+      recipient: { id: "bot-id" },
+      from: { id: "user-id" },
+      value: {
+        __copyRequest: true,
+        __copyText: "Погодити наказ\nНаказ: 000000006",
+      },
+    },
+    sendActivity: async (activity) => {
+      sent.push(activity);
+      return { id: "sent-copy-1" };
+    },
+    updateActivity: async () => {
+      throw new Error("card must not be updated on copy request");
+    },
+  });
+
+  assert.equal(updates.length, 0);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0], "Погодити наказ\nНаказ: 000000006");
+});
+
 test("buildSubmittedStateCard keeps original card body and single selected action", () => {
   const card = buildSubmittedStateCard({
     action: "approve",

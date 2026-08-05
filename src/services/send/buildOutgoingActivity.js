@@ -171,23 +171,16 @@ function enrichAdaptiveCard(adaptiveCard) {
 
   const copyText = cardToPlainText(card);
   if (copyText) {
-    const copyBlockId = "__copyText";
-    card.body = [
-      ...(Array.isArray(card.body) ? card.body : []),
-      {
-        type: "TextBlock",
-        id: copyBlockId,
-        isVisible: false,
-        wrap: true,
-        text: copyText,
-      },
-    ];
+    // Bot replies with a plain message so native copy works on mobile too.
     card.actions = [
       ...(Array.isArray(card.actions) ? card.actions : []),
       {
-        type: "Action.ToggleVisibility",
+        type: "Action.Submit",
         title: "📋 Текст для копіювання",
-        targetElements: [copyBlockId],
+        data: {
+          __copyRequest: true,
+          __copyText: copyText,
+        },
       },
     ];
   }
