@@ -218,6 +218,20 @@ function buildSubmittedStateCard(data = {}) {
   };
 }
 
+function formatCopyText(text) {
+  if (typeof text !== "string") {
+    return "";
+  }
+
+  // Teams collapses single newlines in markdown, so force hard line breaks.
+  return text
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("  \n")
+    .trim();
+}
+
 async function tryUpdateSubmittedCard(context, data) {
   const originalActivityId = context.activity.replyToId;
   if (!originalActivityId) {
@@ -259,10 +273,7 @@ class TeamsIntegrationBot extends ActivityHandler {
 
       if (hasCardPayload) {
         if (context.activity.value && context.activity.value.__copyRequest) {
-          const copyText =
-            typeof context.activity.value.__copyText === "string"
-              ? context.activity.value.__copyText.trim()
-              : "";
+          const copyText = formatCopyText(context.activity.value.__copyText);
           await context.sendActivity(
             copyText || "Немає тексту для копіювання.",
           );
@@ -336,4 +347,5 @@ module.exports = {
   buildSubmittedStateCard,
   sanitizeActionData,
   extractBindToken,
+  formatCopyText,
 };

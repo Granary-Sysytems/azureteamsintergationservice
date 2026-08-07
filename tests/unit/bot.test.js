@@ -6,6 +6,7 @@ const {
   buildSubmittedStateCard,
   sanitizeActionData,
   extractBindToken,
+  formatCopyText,
 } = require("../../src/bot/TeamsIntegrationBot");
 const {
   mapTenantId,
@@ -143,7 +144,14 @@ test("bot replies with plain text on copy request and does not enqueue update", 
 
   assert.equal(updates.length, 0);
   assert.equal(sent.length, 1);
-  assert.equal(sent[0], "Погодити наказ\nНаказ: 000000006");
+  assert.equal(sent[0], "Погодити наказ  \nНаказ: 000000006");
+});
+
+test("formatCopyText keeps line breaks visible in Teams markdown", () => {
+  assert.equal(formatCopyText("line1\nline2\nline3"), "line1  \nline2  \nline3");
+  assert.equal(formatCopyText("line1\r\nline2"), "line1  \nline2");
+  assert.equal(formatCopyText("  padded  \n  next  "), "padded  \n  next");
+  assert.equal(formatCopyText(null), "");
 });
 
 test("buildSubmittedStateCard keeps original card body and single selected action", () => {
